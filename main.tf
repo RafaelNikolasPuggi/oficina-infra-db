@@ -76,25 +76,29 @@ resource "aws_db_instance" "this" {
 # --- Publica o que os outros repositórios precisam ---
 
 resource "aws_ssm_parameter" "db_endpoint" {
-  name  = "/oficina/db_endpoint"
-  type  = "String"
-  value = aws_db_instance.this.address
+  name      = "/oficina/db_endpoint"
+  type      = "String"
+  value     = aws_db_instance.this.address
+  overwrite = true
 }
 
 resource "aws_ssm_parameter" "db_name" {
-  name  = "/oficina/db_name"
-  type  = "String"
-  value = var.db_name
+  name      = "/oficina/db_name"
+  type      = "String"
+  value     = var.db_name
+  overwrite = true
 }
 
 resource "aws_ssm_parameter" "db_username" {
-  name  = "/oficina/db_username"
-  type  = "SecureString"
-  value = var.db_username
+  name      = "/oficina/db_username"
+  type      = "SecureString"
+  value     = var.db_username
+  overwrite = true
 }
 
 resource "aws_ssm_parameter" "db_password" {
-  name  = "/oficina/db_password"
-  type  = "SecureString"
-  value = random_password.db_password.result
+  name      = "/oficina/db_password"
+  type      = "SecureString"
+  value     = random_password.db_password.result
+  overwrite = true
 }
