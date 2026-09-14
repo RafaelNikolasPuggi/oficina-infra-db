@@ -7,13 +7,10 @@ endpoint/credenciais publicados aqui).
 
 ## Por que RDS PostgreSQL gerenciado
 
-Retoma e formaliza a justificativa já usada nas Fases 1/2 (dados fortemente
-relacionais, transações ACID para a baixa de estoque) e adiciona o motivo específico da
-Fase 3: gerenciado significa backups automáticos, patching de segurança e failover sem
-operação manual — trade-off aceitável de custo/controle para não ter que manter um
-Postgres em pé manualmente em produção. Ver `docs/rfc/` no repositório principal para a
-análise completa (alternativas consideradas: Aurora Serverless v2, DynamoDB, self-hosted
-no próprio EKS).
+Mesma justificativa relacional das Fases 1/2 (transações ACID para a baixa de
+estoque), mais o motivo específico da Fase 3: backups automáticos, patching e failover
+sem operação manual. Alternativas consideradas (Aurora Serverless v2, DynamoDB,
+self-hosted no EKS) em `docs/rfc/` no repositório principal.
 
 ## ⚠️ Custo
 
