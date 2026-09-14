@@ -21,6 +21,24 @@ no próprio EKS).
 tier, gira em torno de US$ 0,017/h + armazenamento (20GB gp3). `terraform destroy`
 depois da demonstração.
 
+## Diagrama
+
+```mermaid
+flowchart LR
+    K8S["oficina-infra-k8s<br/>(repo 2)"] -->|"SSM: vpc_id,<br/>private_subnet_ids, vpc_cidr"| DB
+
+    subgraph DB["oficina-infra-db (este repo)"]
+        SG["aws_security_group.db<br/>(libera 5432 só na VPC)"]
+        SUBG["aws_db_subnet_group.this"]
+        RDS[("aws_db_instance.this<br/>PostgreSQL 16, db.t3.micro")]
+        SG --> RDS
+        SUBG --> RDS
+    end
+
+    DB -->|"SSM: db_endpoint,<br/>db_username, db_password"| Lambda["oficina-lambda-auth<br/>(repo 1)"]
+    DB -->|"SSM: db_endpoint,<br/>db_username, db_password"| App["oficina-tech-challenge<br/>(repo 4, deploy no EKS)"]
+```
+
 ## Como aplicar
 
 ```bash
