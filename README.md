@@ -18,8 +18,8 @@ no próprio EKS).
 ## ⚠️ Custo
 
 `db.t3.micro` é elegível ao **free tier de 12 meses** em contas AWS novas. Fora do free
-tier, gira em torno de US$ 0,017/h + armazenamento (20GB gp3). `terraform destroy`
-depois da demonstração.
+tier, gira em torno de US$ 0,017/h + armazenamento (20GB gp3). Rode `terraform destroy`
+quando o ambiente não estiver em uso para não manter custo ocioso.
 
 ## Diagrama
 
