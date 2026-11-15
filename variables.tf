@@ -34,6 +34,30 @@ variable "postgres_engine_version" {
   default = "16.4"
 }
 
+# --- Fase 4: bancos lógicos próprios de cada microsserviço, na mesma
+# instância RDS acima (ver main.tf e o job create-service-dbs no
+# ci-cd.yml) ---
+
+variable "os_db_name" {
+  type    = string
+  default = "oficina_os"
+}
+
+variable "os_db_username" {
+  type    = string
+  default = "oficina_os"
+}
+
+variable "producao_db_name" {
+  type    = string
+  default = "oficina_producao"
+}
+
+variable "producao_db_username" {
+  type    = string
+  default = "oficina_producao"
+}
+
 # --- Publicados pelo oficina-infra-k8s ---
 
 variable "ssm_vpc_id_param" {

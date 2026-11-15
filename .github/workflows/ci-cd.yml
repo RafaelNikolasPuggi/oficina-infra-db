@@ -32,5 +32,83 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
       - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
       - run: terraform init
       - run: terraform apply -auto-approve
+
+      - uses: azure/setup-kubectl@v4
+
+      - name: Apontar kubectl para o cluster EKS (oficina-infra-k8s)
+        run: |
+          EKS_CLUSTER_NAME=$(aws ssm get-parameter --name /oficina/eks_cluster_name --query Parameter.Value --output text)
+          aws eks update-kubeconfig --region "${{ vars.AWS_REGION || 'us-east-1' }}" --name "$EKS_CLUSTER_NAME"
+
+      - name: Criar bancos/roles da Fase 4 (os-service, producao-service)
+        # A instância RDS é privada (publicly_accessible = false) — o
+        # runner do GitHub Actions não a alcança diretamente. Este passo
+        # roda de dentro do EKS (mesma VPC) via um pod efêmero, igual ao
+        # padrão já usado pro seed-admin nos repos de aplicação.
+        run: |
+          DB_ENDPOINT=$(terraform output -raw db_endpoint)
+          MASTER_USER=$(terraform output -raw master_db_username)
+          MASTER_PASSWORD=$(terraform output -raw master_db_password)
+          OS_DB_NAME=$(terraform output -raw os_db_name)
+          OS_DB_USERNAME=$(terraform output -raw os_db_username)
+          OS_DB_PASSWORD=$(terraform output -raw os_db_password)
+          PRODUCAO_DB_NAME=$(terraform output -raw producao_db_name)
+          PRODUCAO_DB_USERNAME=$(terraform output -raw producao_db_username)
+          PRODUCAO_DB_PASSWORD=$(terraform output -raw producao_db_password)
+
+          echo "::add-mask::$MASTER_PASSWORD"
+          echo "::add-mask::$OS_DB_PASSWORD"
+          echo "::add-mask::$PRODUCAO_DB_PASSWORD"
+
+          # Heredoc com aspas (<<'SQL'): nenhuma expansão do bash acontece
+          # aqui dentro, então os blocos DO $$ ... $$ do Postgres passam
+          # intactos — a substituição dos valores reais é feita depois,
+          # por sed, evitando qualquer problema de escaping de $.
+          cat > /tmp/create-service-dbs.sql <<'SQL'
+          SELECT 'CREATE DATABASE __OS_DB_NAME__' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '__OS_DB_NAME__')\gexec
+          SELECT 'CREATE DATABASE __PRODUCAO_DB_NAME__' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '__PRODUCAO_DB_NAME__')\gexec
+
+          DO $$ BEGIN
+            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '__OS_DB_USERNAME__') THEN
+              CREATE ROLE __OS_DB_USERNAME__ WITH LOGIN PASSWORD '__OS_DB_PASSWORD__';
+            ELSE
+              ALTER ROLE __OS_DB_USERNAME__ WITH PASSWORD '__OS_DB_PASSWORD__';
+            END IF;
+          END $$;
+
+          DO $$ BEGIN
+            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '__PRODUCAO_DB_USERNAME__') THEN
+              CREATE ROLE __PRODUCAO_DB_USERNAME__ WITH LOGIN PASSWORD '__PRODUCAO_DB_PASSWORD__';
+            ELSE
+              ALTER ROLE __PRODUCAO_DB_USERNAME__ WITH PASSWORD '__PRODUCAO_DB_PASSWORD__';
+            END IF;
+          END $$;
+
+          ALTER DATABASE __OS_DB_NAME__ OWNER TO __OS_DB_USERNAME__;
+          ALTER DATABASE __PRODUCAO_DB_NAME__ OWNER TO __PRODUCAO_DB_USERNAME__;
+
+          \c __OS_DB_NAME__
+          ALTER SCHEMA public OWNER TO __OS_DB_USERNAME__;
+
+          \c __PRODUCAO_DB_NAME__
+          ALTER SCHEMA public OWNER TO __PRODUCAO_DB_USERNAME__;
+          SQL
+
+          sed -i \
+            -e "s/__OS_DB_NAME__/${OS_DB_NAME}/g" \
+            -e "s/__OS_DB_USERNAME__/${OS_DB_USERNAME}/g" \
+            -e "s/__OS_DB_PASSWORD__/${OS_DB_PASSWORD}/g" \
+            -e "s/__PRODUCAO_DB_NAME__/${PRODUCAO_DB_NAME}/g" \
+            -e "s/__PRODUCAO_DB_USERNAME__/${PRODUCAO_DB_USERNAME}/g" \
+            -e "s/__PRODUCAO_DB_PASSWORD__/${PRODUCAO_DB_PASSWORD}/g" \
+            /tmp/create-service-dbs.sql
+
+          kubectl run create-service-dbs --rm -i --restart=Never \
+            --image=postgres:16-alpine \
+            --env="PGPASSWORD=${MASTER_PASSWORD}" \
+            -- psql -h "${DB_ENDPOINT}" -U "${MASTER_USER}" -d postgres -v ON_ERROR_STOP=1 -f - \
+            < /tmp/create-service-dbs.sql
