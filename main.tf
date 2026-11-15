@@ -25,6 +25,19 @@ resource "random_password" "db_password" {
   special = false # evita caracteres que a engine do RDS rejeita na senha mestra
 }
 
+# --- Fase 4: cada microsserviço tem sua própria role/banco lógico nesta
+# mesma instância (compartilhada para conter custo), nunca o usuário
+# mestre acima — ver docs/adr sobre a decisão de 1 instância compartilhada.
+resource "random_password" "os_db_password" {
+  length  = 24
+  special = false
+}
+
+resource "random_password" "producao_db_password" {
+  length  = 24
+  special = false
+}
+
 resource "aws_db_subnet_group" "this" {
   name       = "${var.db_identifier}-subnet-group"
   subnet_ids = local.private_subnet_ids
@@ -100,5 +113,52 @@ resource "aws_ssm_parameter" "db_password" {
   name      = "/oficina/db_password"
   type      = "SecureString"
   value     = random_password.db_password.result
+  overwrite = true
+}
+
+# --- Fase 4: credenciais por microsserviço (roles criadas pelo job
+# create-service-dbs no ci-cd.yml, não pelo provider do AWS/Terraform —
+# a instância é privada, o runner do GitHub Actions não a alcança
+# diretamente; o job roda de dentro do EKS, que está na mesma VPC) ---
+
+resource "aws_ssm_parameter" "os_db_name" {
+  name      = "/oficina/os_db_name"
+  type      = "String"
+  value     = var.os_db_name
+  overwrite = true
+}
+
+resource "aws_ssm_parameter" "os_db_username" {
+  name      = "/oficina/os_db_username"
+  type      = "SecureString"
+  value     = var.os_db_username
+  overwrite = true
+}
+
+resource "aws_ssm_parameter" "os_db_password" {
+  name      = "/oficina/os_db_password"
+  type      = "SecureString"
+  value     = random_password.os_db_password.result
+  overwrite = true
+}
+
+resource "aws_ssm_parameter" "producao_db_name" {
+  name      = "/oficina/producao_db_name"
+  type      = "String"
+  value     = var.producao_db_name
+  overwrite = true
+}
+
+resource "aws_ssm_parameter" "producao_db_username" {
+  name      = "/oficina/producao_db_username"
+  type      = "SecureString"
+  value     = var.producao_db_username
+  overwrite = true
+}
+
+resource "aws_ssm_parameter" "producao_db_password" {
+  name      = "/oficina/producao_db_password"
+  type      = "SecureString"
+  value     = random_password.producao_db_password.result
   overwrite = true
 }

@@ -53,11 +53,22 @@ terraform apply
 | `random_password.db_password` | Senha mestra gerada aleatoriamente |
 | `aws_ssm_parameter.*` | Publica endpoint/credenciais para `oficina-lambda-auth` e o deploy do app principal |
 
+## Fase 4 — bancos por microsserviço (mesma instância, compartilhada)
+
+Em vez de uma instância RDS por microsserviço (triplicaria o custo), o `oficina-os-service` e o `oficina-producao-service` compartilham **esta mesma instância**, cada um com seu próprio banco lógico e sua própria *role* — nunca o usuário mestre acima, e nenhum dos dois pode acessar o banco do outro.
+
+Como a instância é privada (`publicly_accessible = false`), o runner do GitHub Actions não alcança o Postgres diretamente pra criar esses bancos/roles. O job `apply` do `ci-cd.yml` resolve isso rodando um pod efêmero **dentro do EKS** (mesma VPC, então alcança o RDS normalmente) que executa o SQL de bootstrap via `psql` — mesmo padrão já usado pro `seed-admin` nos repositórios de aplicação.
+
+| Recurso novo | Descrição |
+|---|---|
+| `random_password.os_db_password` / `producao_db_password` | Senhas próprias de cada *role* |
+| `aws_ssm_parameter.os_db_*` / `producao_db_*` | Publicados pra cada serviço ler no próprio `deploy-eks` |
+
 ## Modelo de dados
 
-O schema é criado pela própria aplicação (`oficina-tech-challenge`, via
-`synchronize`/TypeORM na primeira execução — ver o README de lá). O diagrama ER e a
-explicação dos relacionamentos ficam em `docs/database/` no repositório principal.
+O schema de cada serviço é criado pela própria aplicação (`synchronize`/TypeORM na
+primeira execução). O diagrama ER e a explicação dos relacionamentos do monólito da
+Fase 3 ficam em `docs/database/` no repositório `oficina-tech-challenge`.
 
 ## Destruir
 
